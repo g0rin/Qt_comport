@@ -128,13 +128,11 @@ void MainWindow::closeEvent(QCloseEvent *event)
     event->accept();
 }
 
-void MainWindow::getdataout(QByteArray *data)
+void MainWindow::getdataout(QByteArray *data, const QString str)
 {
     data->clear();
-    QString str = (textEd_out->toPlainText());
     if (rbt_ASCIIout->isChecked())//ASCII
     {
-        str = textEd_out->toPlainText();
         *data->append(str);
     }
     if (rbt_Decout->isChecked())//Dec
@@ -211,7 +209,7 @@ void MainWindow::readSettings()
     portsettings->Timeout_Millisec = 500;
     portsettings->Timeout_Sec = 0;
     settings.endGroup();
-
+*/
     settings.beginGroup("parameters");
     spinBox_Period->setValue(settings.value("periodvalue",0).toInt());
     TypeDataInOut type = (TypeDataInOut)(settings.value("typedataout",0).toInt());
@@ -252,7 +250,7 @@ void MainWindow::readSettings()
     textEd_out->setPlainText(settings.value("dataout","").toString());
     calcTimeoutAct->setChecked(settings.value("calctimeout",false).toBool());
     settings.endGroup();
-    */
+
 }
 
 void MainWindow::writeSettings()
@@ -432,14 +430,14 @@ void MainWindow::openPort()
     counter_out = 0;
 }
 
-void MainWindow::receiveMsg(const QTime timesl, const QByteArray *data)
+void MainWindow::receiveMsg(const QTime timesl, const QByteArray &data)
 {
-    textBr_mess->append(QString("read %1").arg(data->size()));
+    textBr_mess->append(QString("read %1").arg(data.size()));
 
     QTime timedb;
     timedb = timesl ;
-    qDebug()<<"mainwindow "<<"inputtime= "<<"\t"<<timedb.second()<<" "<<timedb.msec();
-    qDebug()<<"mainwindow "<<"time= "<<"\t\t\t"<<timedb.currentTime().second()<<" "<<timedb.currentTime().msec()<<"-------------------------";
+    //qDebug()<<"mainwindow "<<"inputtime= "<<"\t"<<timedb.second()<<" "<<timedb.msec();
+    //qDebug()<<"mainwindow "<<"time= "<<"\t\t\t"<<timedb.currentTime().second()<<" "<<timedb.currentTime().msec()<<"-------------------------";
 
     if (calcTimeoutAct->isChecked())
     {
@@ -455,8 +453,10 @@ void MainWindow::receiveMsg(const QTime timesl, const QByteArray *data)
     }
     else
         textBr_inp->append(transformInpData(data));
-    counter_in+=data->size();
+    counter_in+=data.size();
     labelReceive->setText(QString("receive %1").arg(counter_in));
+
+    commandSend(data);
 }
 
 void MainWindow::SetCurComboBState()
@@ -484,21 +484,22 @@ void MainWindow::setTimeoutTimer(bool state)
     }
 }
 
-QString MainWindow::transformInpData(const QByteArray *data)
+QString MainWindow::transformInpData(const QByteArray &data)
 {
-    const QString tab = "  ";
+    const QString tab = " ";
     QString res;
     if (rbt_Decin->isChecked())
     {
-        for (int i = 0;i < data->size();i++)
-            res = res+QString("%1").arg(data[i].toInt())+tab;
+        for (int i = 0;i < data.size();i++)
+            res = res+QString("%1").arg(static_cast<quint8>(data.at(i)))+tab;
+        res.resize(res.length() - 1);
     }
 
     if (rbt_NMEAin->isChecked())
     {
         int i = 0;
-        for (;i < data->size();i++)
-            switch (data[i].toInt())
+        for (;i < data.size();i++)
+            switch (data.at(i))
             {
             case 0:
                 res += "\'0\'";
@@ -518,8 +519,8 @@ QString MainWindow::transformInpData(const QByteArray *data)
     if (rbt_ASCIIin->isChecked())
     {
         int i = 0;
-        for (;i < data->size();i++)
-            switch (data[i].toInt())
+        for (;i < data.size();i++)
+            switch (data.at(i))
             {
             case 0:
                 res += "\'0\'";
@@ -531,22 +532,43 @@ QString MainWindow::transformInpData(const QByteArray *data)
 
     if (rbt_BINin->isChecked())
     {
-        for (int i = 0;i < data->size();i++)
-            res = res+QString("%1").arg(data[i].toInt(),0,2)+tab;
+        for (int i = 0;i < data.size();i++)
+            res = res+QString("%1").arg((int)data.at(i),0,2)+tab;
     }
     if (rbt_HEXin->isChecked())
     {
-        for (int i = 0;i < data->size();i++)
-            res = res+QString("%1").arg(data[i].toInt(),0,16)+tab;
+        for (int i = 0;i < data.size();i++)
+            res = res+QString("%1").arg((int)data.at(i),0,16)+tab;
     }
 
     return res;
 }
 
+void MainWindow::commandSend(const QByteArray &data)
+{
+    QString inp;
+    QString out;
+    inp = transformInpData(data);
+    if (m_hashCommand.contains(inp))
+        out = m_hashCommand.value(inp);
+    QByteArray baout;
+    getdataout(&baout, out);
+    int count = port->write(baout, baout.length());
+    textBr_mess->append(QString("transmited %1").arg(count));
+
+    if (progressBar->value() >= progressBar->maximum())
+        progressBar->reset();
+    else
+        progressBar->setValue(progressBar->value()+1);
+    if (count == -1) count = 0;
+    counter_out+=count;
+    labelTransmit->setText(QString("transmit %1").arg(counter_out));
+}
+
 void MainWindow::transmitMsg()
 {
     QByteArray data;
-    getdataout(&data);
+    getdataout(&data, textEd_out->toPlainText());
     int count = port->write(data, data.length());
     textBr_mess->append(QString("transmited %1").arg(count));
 
@@ -619,7 +641,8 @@ void MainWindow::readFromPort()
         return;
     QByteArray data = port->readAll();
 
-    receiveMsg(QTime::currentTime(), &data);
+    receiveMsg(QTime::currentTime(), data);
+    qDebug() << data;
 }
 
 void MainWindow::changeCommand()

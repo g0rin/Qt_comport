@@ -42,8 +42,10 @@ private:
     bool bDTR;
     void createMainMenu();
     void createDialogs();
-    void getdataout(QByteArray *data);
-    QString transformInpData(const QByteArray *data);
+    void getdataout(QByteArray *data, const QString str);
+    QString transformInpData(const QByteArray &data);
+    void commandSend(const QByteArray &data);
+
 
     void readSettings();
     void writeSettings();
@@ -56,7 +58,7 @@ private slots:
     void closePort();
     void enabledPortBt();
     void openPort();
-    void receiveMsg(const QTime timesl, const QByteArray *data);
+    void receiveMsg(const QTime timesl, const QByteArray &data);
     void SetCurComboBState();
     void setTimeoutTimer(bool state);
     void transmitMsg();
